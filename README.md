@@ -1,27 +1,22 @@
-<p align="center">
-  <img width="400" alt="Parcelvoy Logo" src=".github/assets/logo-light.png#gh-light-mode-only" />
-  <img width="400" alt="Parcelvoy Logo" src=".github/assets/logo-dark.png#gh-dark-mode-only" />
-</p>
-
-# Parcelvoy JS SDK
+# Postles JS SDK
 
 ## Installation
 To install the SDK, use Yarn, npm, or a script tag:
 
 - npm
 ```
-npm install @parcelvoy/js-sdk
+npm install @postles/js-sdk
 ```
 
 - Yarn
 ```
-yarn add @parcelvoy/js-sdk
+yarn add @postles/js-sdk
 ```
 
 script tag
 
 ```
-<script src="https://unpkg.com/@parcelvoy/js-sdk/lib/esm/index.js"></script>
+<script src="https://unpkg.com/@postles/js-sdk/lib/esm/index.js"></script>
 ```
 
 ## Usage
@@ -30,14 +25,14 @@ The SDK can be used both on the server or in the web browser. The main differenc
 ### Initialize
 Before using any methods, the library must be initialized with an API key and URL endpoint.
 
-If you aren't accessing the SDK via script tag, start by importing the Parcelvoy SDK:
+If you aren't accessing the SDK via script tag, start by importing the Postles SDK:
 ```typescript
 
 // 
-const { Client /** or BrowserClient */ } = require('@parcelvoy/js-sdk')
+const { Client /** or BrowserClient */ } = require('@postles/js-sdk')
 
 // Or
-import { Client /** or BrowserClient */ } from '@parcelvoy/js-sdk'
+import { Client /** or BrowserClient */ } from '@postles/js-sdk'
 ```
 
 Then you can initialize the library:
@@ -45,19 +40,19 @@ Then you can initialize the library:
 // Node
 const client = new Client({
     apiKey: "XXX-XXX",
-    urlEndpoint: "https://app.parcelvoy.com/api"
+    urlEndpoint: "https://app.postles.com/api"
 })
 
 // Browser
 const client = new BrowserClient({
     apiKey: "XXX-XXX",
-    urlEndpoint: "https://app.parcelvoy.com/api"
+    urlEndpoint: "https://app.postles.com/api"
 })
 
 // Or global script
-Parcelvoy.initialize({
+Postles.initialize({
     apiKey: "XXX-XXX",
-    urlEndpoint: "https://app.parcelvoy.com/api"
+    urlEndpoint: "https://app.postles.com/api"
 })
 ```
 
@@ -74,7 +69,7 @@ client.identify({
 })
 
 // Or global script
-Parcelvoy.identify({
+Postles.identify({
     externalId: "XXX-XXX"
     phone: "+1234567890"
     email: "email@email.com"
@@ -95,7 +90,7 @@ client.track({
 })
 
 // Or global script
-Parcelvoy.track({
+Postles.track({
     event: "Tapped Button",
     traits: {
         "Key": "Value"

@@ -1,7 +1,7 @@
 {
-  "name": "@parcelvoy/js-sdk",
+  "name": "@postles/js-sdk",
   "version": "0.0.0",
-  "description": "Parcelvoy Javascript SDK for collecting events",
+  "description": "Postles Javascript SDK for collecting events",
   "scripts": {
     "package:build": "rimraf lib/ && npm run package:build:esm && npm run package:build:cjs",
     "package:build:esm": "tsc --project ./tsconfig.module.json",
@@ -24,7 +24,7 @@
     ]
   },
   "keywords": [
-    "parcelvoy",
+    "postles",
     "js"
   ],
   "author": "Chris Anderson",

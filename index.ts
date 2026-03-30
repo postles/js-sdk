@@ -109,32 +109,32 @@ export class BrowserClient extends Client {
     }
 }
 
-export class Parcelvoy {
+export class Postles {
     static instance?: BrowserClient = undefined
 
     static initialize(props: ClientProps) {
-        Parcelvoy.instance = new BrowserClient(props)
+        Postles.instance = new BrowserClient(props)
     }
 
     static async track(props: TrackProps) {
-        return await Parcelvoy.instance?.track(props)
+        return await Postles.instance?.track(props)
     }
 
     static async identify(props: IdentifyProps) {
-        return await Parcelvoy.instance?.identify(props)
+        return await Postles.instance?.identify(props)
     }
 
     static async alias(props: AliasProps) {
-        return await Parcelvoy.instance?.alias(props)
+        return await Postles.instance?.alias(props)
     }
 }
 
 
-// If running in a browser, expose Parcelvoy from the window object
+// If running in a browser, expose Postles from the window object
 declare global {
-    interface Window { Parcelvoy: any; }
+    interface Window { Postles: any; }
 }
 
 if (typeof window !== 'undefined') {
-    window.Parcelvoy = Parcelvoy
+    window.Postles = Postles
 }
