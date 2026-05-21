@@ -29,5 +29,3 @@ jobs:
             ${{ runner.os }}-node-
       - run: npm ci
       - run: npm run package:publish --tag=$(echo ${GITHUB_REF_NAME:1})
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
