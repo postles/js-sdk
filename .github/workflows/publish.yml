@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
 
 jobs:
-  build-package:
+  publish:
     name: "Publish to GitHub Packages"
     runs-on: ubuntu-latest
     permissions:
@@ -20,12 +20,8 @@ jobs:
         with:
           node-version: 22.x
           registry-url: https://registry.npmjs.org
-      - name: Cache NPM
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-      - run: npm ci
+          cache: npm
+      - name: Upgrade npm (Trusted Publishing requires >= 11.5.1)
+        run: npm install -g npm@latest
+      - run: npm ci --legacy-peer-deps
       - run: npm run package:publish --tag=$(echo ${GITHUB_REF_NAME:1})
