@@ -62,18 +62,18 @@ You can handle the user identity of your users by using the `identify` method. T
 
 // Client
 client.identify({
-    externalId: "XXX-XXX"
-    phone: "+1234567890"
-    email: "email@email.com"
-    traits: {}
+    externalId: "XXX-XXX",
+    phone: "+1234567890",
+    email: "email@email.com",
+    traits: {},
 })
 
 // Or global script
 Postles.identify({
-    externalId: "XXX-XXX"
-    phone: "+1234567890"
-    email: "email@email.com"
-    traits: {}
+    externalId: "XXX-XXX",
+    phone: "+1234567890",
+    email: "email@email.com",
+    traits: {},
 })
 ```
 
@@ -83,17 +83,17 @@ If you want to trigger a journey and list updates off of things a user does with
 
 // Client
 client.track({
-    event: "Tapped Button"
-    traits: {
-        "Key": "Value"
-    }
+    event: "Tapped Button",
+    properties: {
+        "Key": "Value",
+    },
 })
 
 // Or global script
 Postles.track({
     event: "Tapped Button",
-    traits: {
-        "Key": "Value"
-    }
+    properties: {
+        "Key": "Value",
+    },
 })
 ```

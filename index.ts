@@ -25,6 +25,11 @@ type AliasProps = {
     externalId: string
 }
 
+type BrowserAliasProps = {
+    anonymousId?: string
+    externalId: string
+}
+
 export class Client {
     #apiKey: string
     #urlEndpoint: string
@@ -34,38 +39,47 @@ export class Client {
         this.#urlEndpoint = props.urlEndpoint
     }
 
-    async track({ properties: data, ...props }: TrackProps) {
-        return await this.#request('track', { ...props, data })
+    async track({ event, properties, anonymousId, externalId }: TrackProps) {
+        return await this.#request('events', [{
+            name: event,
+            anonymous_id: anonymousId,
+            external_id: externalId,
+            data: properties,
+        }])
     }
 
-    async identify({ traits: data, ...props }: IdentifyProps) {
-        return await this.#request('identify', { ...props, data })
+    async identify({ traits, anonymousId, externalId, phone, email, timezone, locale }: IdentifyProps) {
+        return await this.#request('identify', {
+            anonymous_id: anonymousId,
+            external_id: externalId,
+            phone,
+            email,
+            timezone,
+            locale,
+            data: traits,
+        })
     }
 
-    async alias(props: AliasProps) {
-        return await this.#request('identify', props)
+    async alias({ anonymousId, externalId }: AliasProps) {
+        return await this.#request('alias', {
+            anonymous_id: anonymousId,
+            external_id: externalId,
+        })
     }
 
-    #mapKeys(obj: Record<string, any>) {
-        const camelToUnderscore = (key: string) => key.replace( /([A-Z])/g, "_$1" ).toLowerCase()
-        
-        const newObj: Record<string, any> = {}
-        for (const key in obj) {
-            newObj[camelToUnderscore(key)] = obj[key]
-        }
-        return newObj
-    }
-
-    async #request(path: string, data: Record<string, any>) {
-        const request = await fetch(`${this.#urlEndpoint}/client/${path}`, {
+    async #request(path: string, body: unknown) {
+        const response = await fetch(`${this.#urlEndpoint}/client/${path}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.#apiKey}`,
             },
-            body: JSON.stringify(this.#mapKeys(data)),
+            body: JSON.stringify(body),
         })
-        return await request.text()
+        if (!response.ok) {
+            const text = await response.text()
+            throw new Error(`Postles /client/${path} failed (${response.status}): ${text}`)
+        }
     }
 }
 
@@ -93,13 +107,15 @@ export class BrowserClient extends Client {
         return await this.#client.identify({
             ...props,
             anonymousId: props.anonymousId ?? this.#anonymousId,
-            externalId: props.externalId ?? this.#externalId,
         })
     }
 
-    async alias(props: AliasProps) {
+    async alias(props: BrowserAliasProps) {
         this.#externalId = props.externalId
-        return await this.#client.alias(props)
+        return await this.#client.alias({
+            anonymousId: props.anonymousId ?? this.#anonymousId,
+            externalId: props.externalId,
+        })
     }
 
     uuid() {
@@ -124,7 +140,7 @@ export class Postles {
         return await Postles.instance?.identify(props)
     }
 
-    static async alias(props: AliasProps) {
+    static async alias(props: BrowserAliasProps) {
         return await Postles.instance?.alias(props)
     }
 }
