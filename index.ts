@@ -30,6 +30,43 @@ type BrowserAliasProps = {
     externalId: string
 }
 
+type SubscriptionState = 'subscribed' | 'unsubscribed'
+
+type SubscriptionPreference = {
+    subscriptionId: number
+    name: string
+    channel: string
+    state: SubscriptionState
+}
+
+type SubscriptionPage = {
+    results: SubscriptionPreference[]
+    nextCursor?: string
+    prevCursor?: string
+    limit: number
+}
+
+type GetSubscriptionsProps = {
+    anonymousId?: string
+    externalId?: string
+    cursor?: string
+    limit?: number
+}
+
+type SetSubscriptionProps = {
+    subscriptionId: number
+    state: SubscriptionState
+    anonymousId?: string
+    externalId?: string
+}
+
+type RequestOptions = {
+    method?: string
+    body?: unknown
+    query?: Record<string, string | number | undefined>
+    headers?: Record<string, string | undefined>
+}
+
 export class Client {
     #apiKey: string
     #urlEndpoint: string
@@ -39,17 +76,17 @@ export class Client {
         this.#urlEndpoint = props.urlEndpoint
     }
 
-    async track({ event, properties, anonymousId, externalId }: TrackProps) {
-        return await this.#request('events', [{
+    async track({ event, properties, anonymousId, externalId }: TrackProps): Promise<void> {
+        await this.#request('events', { body: [{
             name: event,
             anonymous_id: anonymousId,
             external_id: externalId,
             data: properties,
-        }])
+        }] })
     }
 
-    async identify({ traits, anonymousId, externalId, phone, email, timezone, locale }: IdentifyProps) {
-        return await this.#request('identify', {
+    async identify({ traits, anonymousId, externalId, phone, email, timezone, locale }: IdentifyProps): Promise<void> {
+        await this.#request('identify', { body: {
             anonymous_id: anonymousId,
             external_id: externalId,
             phone,
@@ -57,29 +94,92 @@ export class Client {
             timezone,
             locale,
             data: traits,
-        })
+        } })
     }
 
-    async alias({ anonymousId, externalId }: AliasProps) {
-        return await this.#request('alias', {
+    async alias({ anonymousId, externalId }: AliasProps): Promise<void> {
+        await this.#request('alias', { body: {
             anonymous_id: anonymousId,
             external_id: externalId,
+        } })
+    }
+
+    /**
+     * Fetch the current user's subscription preferences.
+     *
+     * Only public subscriptions are returned. The user is identified by the
+     * anonymousId / externalId you pass in. Use the returned `nextCursor` to
+     * page through results.
+     */
+    async getSubscriptions({ anonymousId, externalId, cursor, limit }: GetSubscriptionsProps = {}): Promise<SubscriptionPage> {
+        const page = await this.#request('subscriptions', {
+            method: 'GET',
+            query: { cursor, limit },
+            headers: {
+                'x-anonymous-id': anonymousId,
+                'x-external-id': externalId,
+            },
+        })
+        return {
+            results: (page?.results ?? []).map((item: any) => ({
+                subscriptionId: item.subscription_id,
+                name: item.name,
+                channel: item.channel,
+                state: item.state,
+            })),
+            nextCursor: page?.nextCursor,
+            prevCursor: page?.prevCursor,
+            limit: page?.limit,
+        }
+    }
+
+    /**
+     * Update a single subscription preference for the current user.
+     *
+     * Flips one public subscription between `subscribed` and `unsubscribed`.
+     */
+    async setSubscription({ subscriptionId, state, anonymousId, externalId }: SetSubscriptionProps) {
+        return await this.#request(`subscriptions/${subscriptionId}`, {
+            method: 'PUT',
+            body: {
+                anonymous_id: anonymousId,
+                external_id: externalId,
+                state,
+            },
         })
     }
 
-    async #request(path: string, body: unknown) {
-        const response = await fetch(`${this.#urlEndpoint}/client/${path}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.#apiKey}`,
-            },
-            body: JSON.stringify(body),
+    async #request(path: string, { method = 'POST', body, query, headers }: RequestOptions = {}) {
+        let url = `${this.#urlEndpoint}/client/${path}`
+        if (query) {
+            const params = new URLSearchParams()
+            for (const [key, value] of Object.entries(query)) {
+                if (value !== undefined) params.set(key, String(value))
+            }
+            const qs = params.toString()
+            if (qs) url += `?${qs}`
+        }
+        const requestHeaders: Record<string, string> = {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${this.#apiKey}`,
+        }
+        if (body !== undefined) requestHeaders['Content-Type'] = 'application/json'
+        if (headers) {
+            for (const [key, value] of Object.entries(headers)) {
+                if (value !== undefined) requestHeaders[key] = value
+            }
+        }
+        const response = await fetch(url, {
+            method,
+            headers: requestHeaders,
+            body: body !== undefined ? JSON.stringify(body) : undefined,
         })
         if (!response.ok) {
             const text = await response.text()
             throw new Error(`Postles /client/${path} failed (${response.status}): ${text}`)
         }
+        const text = await response.text()
+        return text ? JSON.parse(text) : undefined
     }
 }
 
@@ -118,6 +218,22 @@ export class BrowserClient extends Client {
         })
     }
 
+    async getSubscriptions(props: GetSubscriptionsProps = {}) {
+        return await this.#client.getSubscriptions({
+            ...props,
+            anonymousId: props.anonymousId ?? this.#anonymousId,
+            externalId: props.externalId ?? this.#externalId,
+        })
+    }
+
+    async setSubscription(props: SetSubscriptionProps) {
+        return await this.#client.setSubscription({
+            ...props,
+            anonymousId: props.anonymousId ?? this.#anonymousId,
+            externalId: props.externalId ?? this.#externalId,
+        })
+    }
+
     uuid() {
         return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
             (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
@@ -142,6 +258,14 @@ export class Postles {
 
     static async alias(props: BrowserAliasProps) {
         return await Postles.instance?.alias(props)
+    }
+
+    static async getSubscriptions(props?: GetSubscriptionsProps) {
+        return await Postles.instance?.getSubscriptions(props)
+    }
+
+    static async setSubscription(props: SetSubscriptionProps) {
+        return await Postles.instance?.setSubscription(props)
     }
 }
 
