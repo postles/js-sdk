@@ -33,7 +33,7 @@ type BrowserAliasProps = {
 type SubscriptionState = 'subscribed' | 'unsubscribed'
 
 type SubscriptionPreference = {
-    subscription_id: number
+    subscriptionId: number
     name: string
     channel: string
     state: SubscriptionState
@@ -76,8 +76,8 @@ export class Client {
         this.#urlEndpoint = props.urlEndpoint
     }
 
-    async track({ event, properties, anonymousId, externalId }: TrackProps) {
-        return await this.#request('events', { body: [{
+    async track({ event, properties, anonymousId, externalId }: TrackProps): Promise<void> {
+        await this.#request('events', { body: [{
             name: event,
             anonymous_id: anonymousId,
             external_id: externalId,
@@ -85,8 +85,8 @@ export class Client {
         }] })
     }
 
-    async identify({ traits, anonymousId, externalId, phone, email, timezone, locale }: IdentifyProps) {
-        return await this.#request('identify', { body: {
+    async identify({ traits, anonymousId, externalId, phone, email, timezone, locale }: IdentifyProps): Promise<void> {
+        await this.#request('identify', { body: {
             anonymous_id: anonymousId,
             external_id: externalId,
             phone,
@@ -97,8 +97,8 @@ export class Client {
         } })
     }
 
-    async alias({ anonymousId, externalId }: AliasProps) {
-        return await this.#request('alias', { body: {
+    async alias({ anonymousId, externalId }: AliasProps): Promise<void> {
+        await this.#request('alias', { body: {
             anonymous_id: anonymousId,
             external_id: externalId,
         } })
@@ -112,7 +112,7 @@ export class Client {
      * page through results.
      */
     async getSubscriptions({ anonymousId, externalId, cursor, limit }: GetSubscriptionsProps = {}): Promise<SubscriptionPage> {
-        return await this.#request('subscriptions', {
+        const page = await this.#request('subscriptions', {
             method: 'GET',
             query: { cursor, limit },
             headers: {
@@ -120,6 +120,17 @@ export class Client {
                 'x-external-id': externalId,
             },
         })
+        return {
+            results: (page?.results ?? []).map((item: any) => ({
+                subscriptionId: item.subscription_id,
+                name: item.name,
+                channel: item.channel,
+                state: item.state,
+            })),
+            nextCursor: page?.nextCursor,
+            prevCursor: page?.prevCursor,
+            limit: page?.limit,
+        }
     }
 
     /**
