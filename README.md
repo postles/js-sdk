@@ -97,3 +97,30 @@ Postles.track({
     },
 })
 ```
+
+### Subscription Preferences
+You can build a preference center without any UI by reading and updating a user's subscription preferences. `getSubscriptions` returns the project's public subscriptions along with the current user's state for each, and `setSubscription` flips a single subscription between `subscribed` and `unsubscribed`.
+
+In the browser the cached identity is used automatically. On the server (`Client`) pass the user's `externalId` (or `anonymousId`) on each call.
+```typescript
+
+// Browser (uses the cached, identified user)
+const { results } = await Postles.getSubscriptions()
+results.forEach(pref => {
+    console.log(pref.name, pref.channel, pref.state)
+})
+
+await Postles.setSubscription({
+    subscriptionId: 123,
+    state: "unsubscribed",
+})
+
+// Node (identify the user explicitly)
+const page = await client.getSubscriptions({ externalId: "XXX-XXX" })
+
+await client.setSubscription({
+    subscriptionId: 123,
+    state: "subscribed",
+    externalId: "XXX-XXX",
+})
+```
