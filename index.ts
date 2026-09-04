@@ -1,6 +1,10 @@
 type ClientProps = {
     apiKey: string
     urlEndpoint: string
+    /** Automatically check for in-app messages on init and when the page becomes visible. Default: true */
+    fetchInAppOnForeground?: boolean
+    /** Called for each unread in-app message returned by an automatic check */
+    onInAppMessage?: (notification: PostlesNotification) => void
 }
 
 type TrackProps = {
@@ -59,6 +63,47 @@ type SetSubscriptionProps = {
     anonymousId?: string
     externalId?: string
 }
+
+export type NotificationType = 'banner' | 'alert' | 'html'
+
+export type NotificationContent = {
+    title: string
+    body: string
+    html?: string
+    image?: string
+    readOnShow?: boolean
+    custom?: Record<string, any>
+}
+
+export type PostlesNotification = {
+    id: number
+    contentType: NotificationType
+    content: NotificationContent
+    readAt?: string
+    expiresAt?: string
+}
+
+type NotificationPage = {
+    results: PostlesNotification[]
+    nextCursor?: string
+    prevCursor?: string
+    limit: number
+}
+
+type GetNotificationsProps = {
+    anonymousId?: string
+    externalId?: string
+    cursor?: string
+    limit?: number
+}
+
+type ConsumeNotificationProps = {
+    notificationId: number
+    anonymousId?: string
+    externalId?: string
+}
+
+const inAppFetchThrottle = 30_000
 
 type RequestOptions = {
     method?: string
@@ -149,6 +194,42 @@ export class Client {
         })
     }
 
+    /**
+     * Fetch the current user's unread in-app messages.
+     *
+     * The user is identified by the anonymousId / externalId you pass in. Use
+     * the returned `nextCursor` to page through results.
+     */
+    async getNotifications({ anonymousId, externalId, cursor, limit }: GetNotificationsProps = {}): Promise<NotificationPage> {
+        const page = await this.#request('notifications', {
+            method: 'GET',
+            query: { cursor, limit },
+            headers: {
+                'x-anonymous-id': anonymousId,
+                'x-external-id': externalId,
+            },
+        })
+        return {
+            results: page?.results ?? [],
+            nextCursor: page?.nextCursor,
+            prevCursor: page?.prevCursor,
+            limit: page?.limit,
+        }
+    }
+
+    /**
+     * Mark an in-app message as read so it is not returned again.
+     */
+    async consumeNotification({ notificationId, anonymousId, externalId }: ConsumeNotificationProps): Promise<void> {
+        await this.#request(`notifications/${notificationId}`, {
+            method: 'PUT',
+            body: {
+                anonymous_id: anonymousId,
+                external_id: externalId,
+            },
+        })
+    }
+
     async #request(path: string, { method = 'POST', body, query, headers }: RequestOptions = {}) {
         let url = `${this.#urlEndpoint}/client/${path}`
         if (query) {
@@ -188,10 +269,17 @@ export class BrowserClient extends Client {
     #anonymousId: string = this.uuid()
     #externalId?: string
     #client: Client
+    #fetchInAppOnForeground: boolean
+    #onInAppMessage?: (notification: PostlesNotification) => void
+    #lastInAppFetch = 0
+    #visibilityListener?: () => void
 
     constructor(props: ClientProps) {
         super(props)
         this.#client = new Client(props)
+        this.#fetchInAppOnForeground = props.fetchInAppOnForeground ?? true
+        this.#onInAppMessage = props.onInAppMessage
+        this.#startInAppChecks()
     }
 
     async track(props: TrackProps) {
@@ -234,6 +322,54 @@ export class BrowserClient extends Client {
         })
     }
 
+    async getNotifications(props: GetNotificationsProps = {}) {
+        this.#lastInAppFetch = Date.now()
+        return await this.#client.getNotifications({
+            ...props,
+            anonymousId: props.anonymousId ?? this.#anonymousId,
+            externalId: props.externalId ?? this.#externalId,
+        })
+    }
+
+    async consumeNotification(props: ConsumeNotificationProps) {
+        return await this.#client.consumeNotification({
+            ...props,
+            anonymousId: props.anonymousId ?? this.#anonymousId,
+            externalId: props.externalId ?? this.#externalId,
+        })
+    }
+
+    /**
+     * Stop listening for page visibility changes.
+     *
+     * Call this if you replace the client, so the old one stops checking for
+     * in-app messages.
+     */
+    dispose() {
+        if (this.#visibilityListener) {
+            document.removeEventListener('visibilitychange', this.#visibilityListener)
+            this.#visibilityListener = undefined
+        }
+    }
+
+    #startInAppChecks() {
+        if (!this.#fetchInAppOnForeground || !this.#onInAppMessage) return
+        if (typeof document === 'undefined') return
+
+        this.#visibilityListener = () => {
+            if (document.visibilityState === 'visible') this.#checkInAppMessages()
+        }
+        document.addEventListener('visibilitychange', this.#visibilityListener)
+        this.#checkInAppMessages()
+    }
+
+    #checkInAppMessages() {
+        if (Date.now() - this.#lastInAppFetch < inAppFetchThrottle) return
+        this.getNotifications()
+            .then(page => page.results.forEach(notification => this.#onInAppMessage?.(notification)))
+            .catch(() => {})
+    }
+
     uuid() {
         return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
             (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
@@ -245,6 +381,7 @@ export class Postles {
     static instance?: BrowserClient = undefined
 
     static initialize(props: ClientProps) {
+        Postles.instance?.dispose()
         Postles.instance = new BrowserClient(props)
     }
 
@@ -266,6 +403,14 @@ export class Postles {
 
     static async setSubscription(props: SetSubscriptionProps) {
         return await Postles.instance?.setSubscription(props)
+    }
+
+    static async getNotifications(props?: GetNotificationsProps) {
+        return await Postles.instance?.getNotifications(props)
+    }
+
+    static async consumeNotification(props: ConsumeNotificationProps) {
+        return await Postles.instance?.consumeNotification(props)
     }
 }
 
