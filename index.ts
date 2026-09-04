@@ -96,7 +96,6 @@ type GetNotificationsProps = {
     anonymousId?: string
     externalId?: string
     cursor?: string
-    limit?: number
 }
 
 type ConsumeNotificationProps = {
@@ -202,17 +201,26 @@ export class Client {
      * The user is identified by the anonymousId / externalId you pass in. Use
      * the returned `nextCursor` to page through results.
      */
-    async getNotifications({ anonymousId, externalId, cursor, limit }: GetNotificationsProps = {}): Promise<NotificationPage> {
+    async getNotifications({ anonymousId, externalId, cursor }: GetNotificationsProps = {}): Promise<NotificationPage> {
         const page = await this.#request('notifications', {
             method: 'GET',
-            query: { cursor, limit },
+            query: { cursor },
             headers: {
                 'x-anonymous-id': anonymousId,
                 'x-external-id': externalId,
             },
         })
         return {
-            results: page?.results ?? [],
+            results: (page?.results ?? []).map((item: any) => ({
+                id: item.id,
+                contentType: item.content_type,
+                content: {
+                    ...item.content,
+                    readOnShow: item.content?.read_on_show,
+                },
+                readAt: item.read_at,
+                expiresAt: item.expires_at,
+            })),
             nextCursor: page?.nextCursor,
             prevCursor: page?.prevCursor,
             limit: page?.limit,
