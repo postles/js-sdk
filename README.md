@@ -99,7 +99,7 @@ Postles.track({
 ```
 
 ### In-App Messages
-In-app messages are fetched for you: pass an `onInAppMessage` handler when you initialize and the browser client checks for waiting messages on startup and every time the tab becomes visible again. Your page does not need to call anything itself. Checks are limited to one every 30 seconds, and rendering the message is up to you, since the SDK ships no UI.
+In-app messages are fetched for you: pass an `onInAppMessage` handler when you initialize and the browser client checks for waiting messages every time the tab becomes visible. Messages belong to a known user, so the first check happens when you call `identify`, and the browser anonymous id is new on every page load, so an unidentified visitor is never checked. Checks are limited to one every 30 seconds, a failed check does not use up that window, and rendering a message is up to you, since the SDK ships no UI.
 
 ```typescript
 Postles.initialize({
@@ -111,7 +111,13 @@ Postles.initialize({
         // Mark it as read once it has been shown, so it is not returned again
         Postles.consumeNotification({ notificationId: notification.id })
     },
+    onInAppError: error => {
+        console.warn("Postles in-app check failed", error)
+    },
 })
+
+// The first check runs once the user is known
+Postles.identify({ externalId: "XXX-XXX", traits: {} })
 ```
 
 Set `fetchInAppOnForeground: false` to turn the automatic checks off and call `getNotifications` on your own schedule instead. On the server (`Client`) nothing is automatic: pass the user's `externalId` (or `anonymousId`) to `getNotifications` on each call.

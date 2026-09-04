@@ -5,6 +5,8 @@ type ClientProps = {
     fetchInAppOnForeground?: boolean
     /** Called for each unread in-app message returned by an automatic check */
     onInAppMessage?: (notification: PostlesNotification) => void
+    /** Called when an automatic in-app message check fails */
+    onInAppError?: (error: Error) => void
 }
 
 type TrackProps = {
@@ -271,7 +273,9 @@ export class BrowserClient extends Client {
     #client: Client
     #fetchInAppOnForeground: boolean
     #onInAppMessage?: (notification: PostlesNotification) => void
+    #onInAppError?: (error: Error) => void
     #lastInAppFetch = 0
+    #inAppFetchInFlight = false
     #visibilityListener?: () => void
 
     constructor(props: ClientProps) {
@@ -279,6 +283,7 @@ export class BrowserClient extends Client {
         this.#client = new Client(props)
         this.#fetchInAppOnForeground = props.fetchInAppOnForeground ?? true
         this.#onInAppMessage = props.onInAppMessage
+        this.#onInAppError = props.onInAppError
         this.#startInAppChecks()
     }
 
@@ -292,18 +297,22 @@ export class BrowserClient extends Client {
 
     async identify(props: IdentifyProps) {
         this.#externalId = props.externalId
-        return await this.#client.identify({
+        const result = await this.#client.identify({
             ...props,
             anonymousId: props.anonymousId ?? this.#anonymousId,
         })
+        this.#checkInAppMessages()
+        return result
     }
 
     async alias(props: BrowserAliasProps) {
         this.#externalId = props.externalId
-        return await this.#client.alias({
+        const result = await this.#client.alias({
             anonymousId: props.anonymousId ?? this.#anonymousId,
             externalId: props.externalId,
         })
+        this.#checkInAppMessages()
+        return result
     }
 
     async getSubscriptions(props: GetSubscriptionsProps = {}) {
@@ -323,12 +332,13 @@ export class BrowserClient extends Client {
     }
 
     async getNotifications(props: GetNotificationsProps = {}) {
-        this.#lastInAppFetch = Date.now()
-        return await this.#client.getNotifications({
+        const page = await this.#client.getNotifications({
             ...props,
             anonymousId: props.anonymousId ?? this.#anonymousId,
             externalId: props.externalId ?? this.#externalId,
         })
+        this.#lastInAppFetch = Date.now()
+        return page
     }
 
     async consumeNotification(props: ConsumeNotificationProps) {
@@ -364,10 +374,19 @@ export class BrowserClient extends Client {
     }
 
     #checkInAppMessages() {
+        if (!this.#fetchInAppOnForeground || !this.#onInAppMessage) return
+
+        // Messages belong to a known user, and the browser anonymous id is new on
+        // every page load, so there is nothing to fetch until identify runs
+        if (!this.#externalId) return
+        if (this.#inAppFetchInFlight) return
         if (Date.now() - this.#lastInAppFetch < inAppFetchThrottle) return
+
+        this.#inAppFetchInFlight = true
         this.getNotifications()
             .then(page => page.results.forEach(notification => this.#onInAppMessage?.(notification)))
-            .catch(() => {})
+            .catch(error => this.#onInAppError?.(error instanceof Error ? error : new Error(String(error))))
+            .finally(() => { this.#inAppFetchInFlight = false })
     }
 
     uuid() {
