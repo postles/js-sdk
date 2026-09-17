@@ -107,10 +107,16 @@ A topic's `state` is `subscribed`, `unsubscribed`, or `not_opted_in`. The last o
 
 In the browser the cached identifiers are used automatically. On the server (`Client`) pass the user's `externalId` (or `anonymousId`) on each call.
 
+The examples below import from the package. Via a script tag the same methods are on the global `Postles`, but `PostlesError` and `TOPIC_RESUBSCRIBE_LOCKED` are not, so a script-tag app compares `error.code` against `4004` directly.
+
 #### Rendering a preference center
-`getTopicChannels()` returns one section per channel, already grouped, ordered and flagged the way a preference screen renders it. Show the topic toggles only when the channel has more than one topic or any opt-in topic; a channel with a single opt-out topic needs nothing but its master switch. While a channel is paused, leave its topic toggles visible but disabled. Some channels (today, text) can be turned off from your app but only turned back on from the handset. That is what `canResubscribe: false` means, and `resubscribeTextNumber` is the number to text START to.
+`getTopicChannels()` returns one section per channel, already grouped, ordered and flagged the way a preference screen renders it. Show the topic toggles only when the channel has more than one topic or any opt-in topic; a channel with a single opt-out topic needs nothing but its master switch. While a channel is paused, leave its topic toggles visible but disabled.
+
+Some channels (today, text) can be turned off from your app but only turned back on from the handset. `canResubscribe: false` means exactly that, and it only ever appears while the channel is already off. Render a notice **instead of** the master switch in that case: a switch the user can flip but you are not allowed to submit would fail silently. `resubscribeTextNumber` is the number to text START to, and it is `null` when the project has no text number configured, so do not interpolate it unguarded.
 ```typescript
-const channels = await Postles.getTopicChannels()
+import { Client, PostlesError, TOPIC_RESUBSCRIBE_LOCKED } from '@postles/js-sdk'
+
+const channels = await client.getTopicChannels()
 
 const chosen = new Map()
 const remember = row => chosen.set(row.subscriptionId, row.state === 'subscribed' ? 'subscribed' : 'unsubscribed')
@@ -118,13 +124,15 @@ const remember = row => chosen.set(row.subscriptionId, row.state === 'subscribed
 for (const channel of channels) {
     if (channel.master) {
         remember(channel.master)
-        renderToggle(channel.label, channel.master.state === 'subscribed', {
-            onChange: on => chosen.set(channel.master.subscriptionId, on ? 'subscribed' : 'unsubscribed'),
-        })
-    }
-
-    if (channel.paused && !channel.canResubscribe) {
-        renderNotice(`Text START to ${channel.resubscribeTextNumber} to turn these back on.`)
+        if (channel.canResubscribe) {
+            renderToggle(channel.label, channel.master.state === 'subscribed', {
+                onChange: on => chosen.set(channel.master.subscriptionId, on ? 'subscribed' : 'unsubscribed'),
+            })
+        } else {
+            renderNotice(channel.resubscribeTextNumber
+                ? `Text START to ${channel.resubscribeTextNumber} to turn these back on.`
+                : 'Reply START from your phone to turn these back on.')
+        }
     }
 
     const worthShowing = channel.topics.length > 1 || channel.topics.some(topic => topic.isOptIn)
@@ -140,7 +148,7 @@ for (const channel of channels) {
 ```
 
 #### Saving the screen
-`setTopics()` saves the whole screen in one request (up to 100 rows), so two rapid toggles cannot overwrite each other. Submit every master switch that is not locked, plus only the topics whose master was on when the screen rendered. Paused topics are not submitted, otherwise they would all read as off and opt the user out behind their back. Seed the map from the payload rather than from the controls, so a topic you chose not to show still submits the state it already had.
+`setTopics()` saves the whole screen in one request (up to 100 rows), so two rapid toggles cannot overwrite each other. Submit every master switch that is not locked, plus only the topics whose master was on when the screen rendered. A locked channel contributes nothing, which is why it must not offer a switch in the first place. Paused topics are not submitted, otherwise they would all read as off and opt the user out behind their back. Seed the map from the payload rather than from the controls, so a topic you chose not to show still submits the state it already had.
 ```typescript
 const updates = channels.flatMap(channel => [
     ...(channel.master && channel.canResubscribe
@@ -152,7 +160,7 @@ const updates = channels.flatMap(channel => [
 ])
 
 try {
-    await Postles.setTopics({ updates })
+    await client.setTopics({ updates })
 } catch (error) {
     if (error instanceof PostlesError && error.code === TOPIC_RESUBSCRIBE_LOCKED) {
         renderNotice(error.message)
@@ -175,7 +183,7 @@ await client.unsubscribeTopic({
 ```
 
 #### Renamed from subscriptions
-What this SDK used to call a subscription is now called a topic. The old names still work and still behave exactly as they did, but they are deprecated and your editor will flag them.
+What this SDK used to call a subscription is now called a topic. The old names still work and return the same shapes, but they are deprecated and your editor will flag them. One thing did change for them: a failed request now throws a `PostlesError` carrying the server's own message, where it used to throw a plain `Error` whose message embedded the status and raw response body.
 
 | Old name | Use instead |
 |---|---|
