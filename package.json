@@ -1,11 +1,12 @@
 {
   "name": "@postles/js-sdk",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "description": "Postles Javascript SDK for collecting events",
   "scripts": {
     "package:build": "rimraf lib/ && npm run package:build:esm && npm run package:build:cjs",
     "package:build:esm": "tsc --project ./tsconfig.module.json",
     "package:build:cjs": "tsc --project ./tsconfig.json",
+    "test": "vitest run",
     "package:publish": "npm run package:build && npm version $npm_config_tag --no-git-tag-version && npm pack && npm publish --tag=latest --access public"
   },
   "types": "./lib/cjs/index.d.ts",
@@ -35,7 +36,8 @@
   },
   "devDependencies": {
     "rimraf": "^6.0.1",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^3.0.0"
   },
   "files": [
     "lib"
