@@ -1,11 +1,9 @@
 type ClientProps = {
     apiKey: string
     urlEndpoint: string
-    /** Automatically check for in-app messages on init and when the page becomes visible. Default: true */
+    /** Default: true */
     fetchInAppOnForeground?: boolean
-    /** Called for each unread in-app message returned by an automatic check */
     onInAppMessage?: (notification: PostlesNotification) => void
-    /** Called when an automatic in-app message check fails */
     onInAppError?: (error: Error) => void
 }
 
@@ -299,12 +297,6 @@ export class Client {
         })
     }
 
-    /**
-     * Fetch the current user's unread in-app messages.
-     *
-     * The user is identified by the anonymousId / externalId you pass in. Use
-     * the returned `nextCursor` to page through results.
-     */
     async getNotifications({ anonymousId, externalId, cursor }: GetNotificationsProps = {}): Promise<NotificationPage> {
         const page = await this.#request('notifications', {
             method: 'GET',
@@ -328,9 +320,6 @@ export class Client {
         }
     }
 
-    /**
-     * Mark an in-app message as read so it is not returned again.
-     */
     async consumeNotification({ notificationId, anonymousId, externalId }: ConsumeNotificationProps): Promise<void> {
         await this.#request(`notifications/${notificationId}`, {
             method: 'PUT',
@@ -505,12 +494,7 @@ export class BrowserClient extends Client {
         return await this.#client.consumeNotification({ ...props, ...this.#identity(props) })
     }
 
-    /**
-     * Stop listening for page visibility changes.
-     *
-     * Call this if you replace the client, so the old one stops checking for
-     * in-app messages.
-     */
+    /** Call before replacing the client, or the old one keeps checking on every tab focus. */
     dispose() {
         if (this.#visibilityListener) {
             document.removeEventListener('visibilitychange', this.#visibilityListener)
@@ -532,8 +516,7 @@ export class BrowserClient extends Client {
     #checkInAppMessages() {
         if (!this.#fetchInAppOnForeground || !this.#onInAppMessage) return
 
-        // Messages belong to a known user, and the browser anonymous id is new on
-        // every page load, so there is nothing to fetch until identify runs
+        // The browser anonymous id is new each page load, so only an identified user has messages.
         if (!this.#externalId) return
         if (this.#inAppFetchInFlight) return
         if (Date.now() - this.#lastInAppFetch < inAppFetchThrottle) return
