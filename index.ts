@@ -134,16 +134,12 @@ type NotificationPage = {
     limit: number
 }
 
-type GetNotificationsProps = {
-    anonymousId?: string
-    externalId?: string
+type GetNotificationsProps = Identity & {
     cursor?: string
 }
 
-type ConsumeNotificationProps = {
+type ConsumeNotificationProps = Identity & {
     notificationId: number
-    anonymousId?: string
-    externalId?: string
 }
 
 const inAppFetchThrottle = 30_000
@@ -313,10 +309,7 @@ export class Client {
         const page = await this.#request('notifications', {
             method: 'GET',
             query: { cursor },
-            headers: {
-                'x-anonymous-id': anonymousId,
-                'x-external-id': externalId,
-            },
+            headers: identityHeaders({ anonymousId, externalId }),
         })
         return {
             results: (page?.results ?? []).map((item: any) => ({
@@ -503,21 +496,13 @@ export class BrowserClient extends Client {
     }
 
     async getNotifications(props: GetNotificationsProps = {}) {
-        const page = await this.#client.getNotifications({
-            ...props,
-            anonymousId: props.anonymousId ?? this.#anonymousId,
-            externalId: props.externalId ?? this.#externalId,
-        })
+        const page = await this.#client.getNotifications({ ...props, ...this.#identity(props) })
         this.#lastInAppFetch = Date.now()
         return page
     }
 
     async consumeNotification(props: ConsumeNotificationProps) {
-        return await this.#client.consumeNotification({
-            ...props,
-            anonymousId: props.anonymousId ?? this.#anonymousId,
-            externalId: props.externalId ?? this.#externalId,
-        })
+        return await this.#client.consumeNotification({ ...props, ...this.#identity(props) })
     }
 
     /**
