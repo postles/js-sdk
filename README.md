@@ -120,7 +120,7 @@ Postles.initialize({
 Postles.identify({ externalId: "XXX-XXX", traits: {} })
 ```
 
-Set `fetchInAppOnForeground: false` to turn the automatic checks off and call `getNotifications` on your own schedule instead. On the server (`Client`) nothing is automatic: pass the user's `externalId` (or `anonymousId`) to `getNotifications` on each call.
+Leave out the `onInAppMessage` handler to turn the automatic checks off and call `getNotifications` on your own schedule instead. On the server (`Client`) nothing is automatic: pass the user's `externalId` (or `anonymousId`) to `getNotifications` on each call.
 
 ### Topics
 Read and modify a user's message topics directly through SDK methods. No UI is included, so you can build your own preference center (or manage preferences programmatically).

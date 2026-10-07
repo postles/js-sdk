@@ -1,8 +1,6 @@
 type ClientProps = {
     apiKey: string
     urlEndpoint: string
-    /** Default: true */
-    fetchInAppOnForeground?: boolean
     onInAppMessage?: (notification: PostlesNotification) => void
     onInAppError?: (error: Error) => void
 }
@@ -399,7 +397,6 @@ export class BrowserClient extends Client {
     #anonymousId: string = this.uuid()
     #externalId?: string
     #client: Client
-    #fetchInAppOnForeground: boolean
     #onInAppMessage?: (notification: PostlesNotification) => void
     #onInAppError?: (error: Error) => void
     #lastInAppFetch = 0
@@ -409,7 +406,6 @@ export class BrowserClient extends Client {
     constructor(props: ClientProps) {
         super(props)
         this.#client = new Client(props)
-        this.#fetchInAppOnForeground = props.fetchInAppOnForeground ?? true
         this.#onInAppMessage = props.onInAppMessage
         this.#onInAppError = props.onInAppError
         this.#startInAppChecks()
@@ -503,7 +499,7 @@ export class BrowserClient extends Client {
     }
 
     #startInAppChecks() {
-        if (!this.#fetchInAppOnForeground || !this.#onInAppMessage) return
+        if (!this.#onInAppMessage) return
         if (typeof document === 'undefined') return
 
         this.#visibilityListener = () => {
@@ -514,7 +510,7 @@ export class BrowserClient extends Client {
     }
 
     #checkInAppMessages() {
-        if (!this.#fetchInAppOnForeground || !this.#onInAppMessage) return
+        if (!this.#onInAppMessage) return
 
         // The browser anonymous id is new each page load, so only an identified user has messages.
         if (!this.#externalId) return
