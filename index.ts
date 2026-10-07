@@ -515,7 +515,8 @@ export class BrowserClient extends Client {
         // The browser anonymous id is new each page load, so only an identified user has messages.
         if (!this.#externalId) return
         if (this.#inAppFetchInFlight) return
-        if (Date.now() - this.#lastInAppFetch < inAppFetchThrottle) return
+        const elapsed = Date.now() - this.#lastInAppFetch
+        if (elapsed >= 0 && elapsed < inAppFetchThrottle) return
 
         this.#inAppFetchInFlight = true
         this.getNotifications()
