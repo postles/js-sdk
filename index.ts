@@ -1,6 +1,8 @@
 type ClientProps = {
     apiKey: string
     urlEndpoint: string
+    onInAppMessage?: (notification: PostlesNotification) => void
+    onInAppError?: (error: Error) => void
 }
 
 type TrackProps = {
@@ -101,6 +103,42 @@ type SetTopicProps = Identity & TopicUpdate
 type SetTopicsProps = Identity & {
     updates: TopicUpdate[]
 }
+
+export type NotificationType = 'banner' | 'alert' | 'html'
+
+export type NotificationContent = {
+    title: string
+    body: string
+    html?: string
+    image?: string
+    readOnShow?: boolean
+    custom?: Record<string, any>
+}
+
+export type PostlesNotification = {
+    id: number
+    contentType: NotificationType
+    content: NotificationContent
+    readAt?: string
+    expiresAt?: string
+}
+
+type NotificationPage = {
+    results: PostlesNotification[]
+    nextCursor?: string
+    prevCursor?: string
+    limit: number
+}
+
+type GetNotificationsProps = Identity & {
+    cursor?: string
+}
+
+type ConsumeNotificationProps = Identity & {
+    notificationId: number
+}
+
+const inAppFetchThrottle = 30_000
 
 type ToggleTopicProps = Identity & {
     subscriptionId: number
@@ -257,6 +295,39 @@ export class Client {
         })
     }
 
+    async getNotifications({ anonymousId, externalId, cursor }: GetNotificationsProps = {}): Promise<NotificationPage> {
+        const page = await this.#request('notifications', {
+            method: 'GET',
+            query: { cursor },
+            headers: identityHeaders({ anonymousId, externalId }),
+        })
+        return {
+            results: (page?.results ?? []).map((item: any) => ({
+                id: item.id,
+                contentType: item.content_type,
+                content: {
+                    ...item.content,
+                    readOnShow: item.content?.read_on_show,
+                },
+                readAt: item.read_at,
+                expiresAt: item.expires_at,
+            })),
+            nextCursor: page?.nextCursor,
+            prevCursor: page?.prevCursor,
+            limit: page?.limit,
+        }
+    }
+
+    async consumeNotification({ notificationId, anonymousId, externalId }: ConsumeNotificationProps): Promise<void> {
+        await this.#request(`notifications/${notificationId}`, {
+            method: 'PUT',
+            body: {
+                anonymous_id: anonymousId,
+                external_id: externalId,
+            },
+        })
+    }
+
     /** The server applies at most 100 updates per call, as one read-modify-write. */
     async setTopics({ updates, anonymousId, externalId }: SetTopicsProps): Promise<void> {
         await this.#request('subscriptions', {
@@ -326,10 +397,18 @@ export class BrowserClient extends Client {
     #anonymousId: string = this.uuid()
     #externalId?: string
     #client: Client
+    #onInAppMessage?: (notification: PostlesNotification) => void
+    #onInAppError?: (error: Error) => void
+    #lastInAppFetch = 0
+    #inAppFetchInFlight = false
+    #visibilityListener?: () => void
 
     constructor(props: ClientProps) {
         super(props)
         this.#client = new Client(props)
+        this.#onInAppMessage = props.onInAppMessage
+        this.#onInAppError = props.onInAppError
+        this.#startInAppChecks()
     }
 
     async track(props: TrackProps) {
@@ -342,18 +421,22 @@ export class BrowserClient extends Client {
 
     async identify(props: IdentifyProps) {
         this.#externalId = props.externalId
-        return await this.#client.identify({
+        const result = await this.#client.identify({
             ...props,
             anonymousId: props.anonymousId ?? this.#anonymousId,
         })
+        this.#checkInAppMessages()
+        return result
     }
 
     async alias(props: BrowserAliasProps) {
         this.#externalId = props.externalId
-        return await this.#client.alias({
+        const result = await this.#client.alias({
             anonymousId: props.anonymousId ?? this.#anonymousId,
             externalId: props.externalId,
         })
+        this.#checkInAppMessages()
+        return result
     }
 
     async getTopics(props: GetTopicsProps = {}) {
@@ -397,6 +480,51 @@ export class BrowserClient extends Client {
         }
     }
 
+    async getNotifications(props: GetNotificationsProps = {}) {
+        const page = await this.#client.getNotifications({ ...props, ...this.#identity(props) })
+        this.#lastInAppFetch = Date.now()
+        return page
+    }
+
+    async consumeNotification(props: ConsumeNotificationProps) {
+        return await this.#client.consumeNotification({ ...props, ...this.#identity(props) })
+    }
+
+    /** Call before replacing the client, or the old one keeps checking on every tab focus. */
+    dispose() {
+        if (this.#visibilityListener) {
+            document.removeEventListener('visibilitychange', this.#visibilityListener)
+            this.#visibilityListener = undefined
+        }
+    }
+
+    #startInAppChecks() {
+        if (!this.#onInAppMessage) return
+        if (typeof document === 'undefined') return
+
+        this.#visibilityListener = () => {
+            if (document.visibilityState === 'visible') this.#checkInAppMessages()
+        }
+        document.addEventListener('visibilitychange', this.#visibilityListener)
+        this.#checkInAppMessages()
+    }
+
+    #checkInAppMessages() {
+        if (!this.#onInAppMessage) return
+
+        // The browser anonymous id is new each page load, so only an identified user has messages.
+        if (!this.#externalId) return
+        if (this.#inAppFetchInFlight) return
+        const elapsed = Date.now() - this.#lastInAppFetch
+        if (elapsed >= 0 && elapsed < inAppFetchThrottle) return
+
+        this.#inAppFetchInFlight = true
+        this.getNotifications()
+            .then(page => page.results.forEach(notification => this.#onInAppMessage?.(notification)))
+            .catch(error => this.#onInAppError?.(error instanceof Error ? error : new Error(String(error))))
+            .finally(() => { this.#inAppFetchInFlight = false })
+    }
+
     uuid() {
         return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
             (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
@@ -408,6 +536,7 @@ export class Postles {
     static instance?: BrowserClient = undefined
 
     static initialize(props: ClientProps) {
+        Postles.instance?.dispose()
         Postles.instance = new BrowserClient(props)
     }
 
@@ -455,6 +584,14 @@ export class Postles {
     /** @deprecated Use {@link Postles.setTopic}. */
     static async setSubscription(props: SetSubscriptionProps) {
         return await Postles.instance?.setSubscription(props)
+    }
+
+    static async getNotifications(props?: GetNotificationsProps) {
+        return await Postles.instance?.getNotifications(props)
+    }
+
+    static async consumeNotification(props: ConsumeNotificationProps) {
+        return await Postles.instance?.consumeNotification(props)
     }
 }
 
