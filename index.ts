@@ -4,7 +4,9 @@ type ClientProps = {
 }
 
 export type Geo = {
+    /** Two-letter ISO country code. */
     country?: string
+    /** Region or state code within the country. */
     region?: string
     city?: string
 }
@@ -14,6 +16,7 @@ type TrackProps = {
     anonymousId?: string
     externalId?: string
     properties: Record<string, any>
+    /** Omit to use the location the request came from (public keys only), or send `null` to store no location. */
     geo?: Geo | null
 }
 
