@@ -98,6 +98,15 @@ Postles.track({
 })
 ```
 
+With a public API key, each event is stored with the location the request came from. To set the location yourself, pass `geo`; to store no location, pass `geo: null`.
+```typescript
+client.track({
+    event: "Tapped Button",
+    properties: {},
+    geo: { country: "US", region: "IL", city: "Chicago" },
+})
+```
+
 ### Topics
 Read and modify a user's message topics directly through SDK methods. No UI is included, so you can build your own preference center (or manage preferences programmatically).
 

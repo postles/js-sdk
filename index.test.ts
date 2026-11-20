@@ -108,3 +108,18 @@ describe('setTopics', () => {
         expect(JSON.parse(init.body)).toEqual([{ subscription_id: 1, state: 'subscribed' }])
     })
 })
+
+describe('track', () => {
+    it('omits geo when unset and sends null or the object when given', async () => {
+        const fetchMock = respondWith(202)
+        const sentEvent = (call: number) => JSON.parse(fetchMock.mock.calls[call][1].body)[0]
+
+        await client.track({ event: 'opened', properties: {} })
+        await client.track({ event: 'opened', properties: {}, geo: null })
+        await client.track({ event: 'opened', properties: {}, geo: { country: 'US', region: 'IL', city: 'Chicago' } })
+
+        expect(sentEvent(0)).not.toHaveProperty('geo')
+        expect(sentEvent(1).geo).toBeNull()
+        expect(sentEvent(2).geo).toEqual({ country: 'US', region: 'IL', city: 'Chicago' })
+    })
+})

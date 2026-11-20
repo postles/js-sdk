@@ -3,11 +3,21 @@ type ClientProps = {
     urlEndpoint: string
 }
 
+export type Geo = {
+    /** Two-letter ISO country code. */
+    country?: string
+    /** Region or state code within the country. */
+    region?: string
+    city?: string
+}
+
 type TrackProps = {
     event: string
     anonymousId?: string
     externalId?: string
     properties: Record<string, any>
+    /** Omit to use the location the request came from (public keys only), or send `null` to store no location. */
+    geo?: Geo | null
 }
 
 type IdentifyProps = {
@@ -196,12 +206,13 @@ export class Client {
         this.#urlEndpoint = props.urlEndpoint
     }
 
-    async track({ event, properties, anonymousId, externalId }: TrackProps): Promise<void> {
+    async track({ event, properties, anonymousId, externalId, geo }: TrackProps): Promise<void> {
         await this.#request('events', { body: [{
             name: event,
             anonymous_id: anonymousId,
             external_id: externalId,
             data: properties,
+            geo,
         }] })
     }
 
